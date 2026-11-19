@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "pinfo.h"
 
 struct cpu cpus[NCPU];
 
@@ -701,3 +702,41 @@ procdump(void)
     printk("\n");
   }
 }
+
+int do_getprocs(uint64 uaddr, int max)
+{
+  struct proc *p;
+  struct proc *me = myproc();
+  struct pinfo info;
+  int n = 0;
+
+  for(p = proc; p < &proc[NPROC] && n < max; p++){
+    // Follow the lock order: acquire wait_lock first.
+    acquire(&wait_lock);
+    acquire(&p->lock); // Then acquire the per-process lock.
+
+    if(p->state == UNUSED){
+      release(&p->lock);
+      release(&wait_lock); // Release the locks in reverse order.
+      continue;
+    }
+
+    // Collect the process information before releasing the locks.
+    info.pid = p->pid;
+    info.ppid = (p->parent) ? p->parent->pid : 0;
+    info.state = p->state;
+    info.sz = p->sz;
+    safestrcpy(info.name, p->name, sizeof(info.name));
+
+    // Release both locks before calling copyout.
+    release(&p->lock);
+    release(&wait_lock);
+
+    // Copy the record to user space.
+    if(copyout(me->pagetable, uaddr + n * sizeof(info), (char *)&info, sizeof(info)) < 0)
+      return -1;
+    n++;
+  }
+  return n;
+}
+

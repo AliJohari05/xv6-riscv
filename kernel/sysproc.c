@@ -110,3 +110,14 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+uint64
+sys_getprocs(void)
+{
+  uint64 buf;
+  int max;
+  // Obtaining the array address (argaddr) and the count (argint) from the user
+  if(argaddr(0, &buf) < 0 || argint(1, &max) < 0)
+    return -1;
+    
+  return do_getprocs(buf, max);
+}
