@@ -3,11 +3,13 @@
 #include "kernel/pinfo.h"
 #include "user/user.h"
 
-// Define static array to avoid stack overflow, as user stack is limited to one page
+// Define the enum here so that the compiler recognizes the state names
+enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+
+// Define static array to avoid stack overflow
 static struct pinfo procs[NPROC];
 
 // Map enum procstate to strings for readable output
-// Ensure this order matches the enum procstate in kernel/proc.h
 static char *states[] = {
     [UNUSED]   "UNUSED",
     [USED]     "USED",
