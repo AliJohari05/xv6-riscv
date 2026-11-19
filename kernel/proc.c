@@ -711,32 +711,32 @@ int do_getprocs(uint64 uaddr, int max)
   int n = 0;
 
   for(p = proc; p < &proc[NPROC] && n < max; p++){
-    // Follow the lock order: acquire wait_lock first.
     acquire(&wait_lock);
-    acquire(&p->lock); // Then acquire the per-process lock.
+    acquire(&p->lock); 
 
     if(p->state == UNUSED){
       release(&p->lock);
-      release(&wait_lock); // Release the locks in reverse order.
+      release(&wait_lock);
       continue;
     }
 
-    // Collect the process information before releasing the locks.
     info.pid = p->pid;
     info.ppid = (p->parent) ? p->parent->pid : 0;
     info.state = p->state;
     info.sz = p->sz;
     safestrcpy(info.name, p->name, sizeof(info.name));
 
-    // Release both locks before calling copyout.
     release(&p->lock);
     release(&wait_lock);
 
-    // Copy the record to user space.
-    if(copyout(me->pagetable, uaddr + n * sizeof(info), (uint64)&info, (char *)&info, sizeof(info)) < 0)
-      return -1;
+ 
+    if(copyout(me->pagetable, me->sz, uaddr + n * sizeof(info),
+           (char *)&info, sizeof(info)) < 0)
+  return -1;
+      
     n++;
   }
   return n;
 }
+
 
