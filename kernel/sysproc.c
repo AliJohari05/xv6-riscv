@@ -113,11 +113,15 @@ sys_uptime(void)
 uint64
 sys_getprocs(void)
 {
-  uint64 buf;
+  uint64 uaddr;
   int max;
-  // Obtaining the array address (argaddr) and the count (argint) from the user
-  if(argaddr(0, &buf) < 0 || argint(1, &max) < 0)
-    return -1;
-    
-  return do_getprocs(buf, max);
+
+  // Read the system call arguments using argaddr and argint.
+  // Both functions return void and write their results through pointers.
+  argaddr(0, &uaddr);
+  argint(1, &max);
+
+  // Call the kernel helper and return its result.
+  return do_getprocs(uaddr, max);
 }
+
