@@ -120,6 +120,9 @@ sys_getprocs(void)
   // Both functions return void and write their results through pointers.
   argaddr(0, &uaddr);
   argint(1, &max);
+  // Check for invalid arguments
+  if(uaddr == 0 || max < 0)
+    return -1;
 
   // Call the kernel helper and return its result.
   return do_getprocs(uaddr, max);
