@@ -733,7 +733,7 @@ int do_getprocs(uint64 uaddr, int max)
     release(&wait_lock);
 
     // Copy the record to user space.
-    if(copyout(me->pagetable, uaddr + n * sizeof(info), (char *)&info, sizeof(info)) < 0)
+    if(copyout(me->pagetable, uaddr + n * sizeof(info), (uint64)&info, (char *)&info, sizeof(info)) < 0)
       return -1;
     n++;
   }
