@@ -1,6 +1,7 @@
 #define SBRK_ERROR ((char *)-1)
 
 struct stat;
+struct pinfo;
 
 // system calls
 int fork(void);
@@ -48,3 +49,5 @@ void printf(const char *, ...) __attribute__((format(printf, 1, 2)));
 // umalloc.c
 void *malloc(uint);
 void free(void *);
+int getprocs(struct pinfo*, int);
+

@@ -110,3 +110,21 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+uint64
+sys_getprocs(void)
+{
+  uint64 uaddr;
+  int max;
+
+  // Read the system call arguments using argaddr and argint.
+  // Both functions return void and write their results through pointers.
+  argaddr(0, &uaddr);
+  argint(1, &max);
+  // Check for invalid arguments
+  if(uaddr == 0 || max < 0)
+    return -1;
+
+  // Call the kernel helper and return its result.
+  return do_getprocs(uaddr, max);
+}
+
