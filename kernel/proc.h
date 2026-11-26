@@ -101,4 +101,14 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  int queue;             // شماره صف (1، 2 یا 3)
+uint64 queue_enter;    // تیکی که فرآیند وارد صف یا حالت RUNNABLE شد
+int wait_ticks;        // تیک‌های انتظار در حالت RUNNABLE برای Aging
+int burst;             // زمان اجرا (Time Burst) برای SJF
+int confidence;        // سطح اطمینان (0 تا 100)
+int quantum_ticks;     // تیک‌های مصرف شده از کوانتوم فعلی
+int nice;              // مقدار nice از -20 تا 19
+int weight;            // وزن متناظر با nice
+uint64 vruntime;       // زمان اجرای مجازی مقیاس‌شده
 };

@@ -15,7 +15,7 @@ extern char trampoline[], uservec[];
 void kernelvec();
 
 extern int devintr();
-
+extern struct proc proc[];
 void
 trapinit(void)
 {
@@ -171,6 +171,26 @@ clockintr()
     ticks++;
     wakeup(&ticks);
     release(&tickslock);
+  }
+
+  // به‌روزرسانی متریک‌های زمان‌بند برای تمامی فرآیندهای فعال سیستم
+  struct proc *p;
+  for (p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if (p->state == RUNNING) {
+      p->quantum_ticks++; // افزایش تیک‌های مصرف‌شده از کوانتوم جاری
+      
+      // محاسبه vruntime برای زمان‌بند CFS
+      #ifdef SCHEDULER_CFS
+      if (p->weight > 0)
+        p->vruntime += (1000 * NICE_0_WEIGHT) / p->weight;
+      else
+        p->vruntime += 1000;
+      #endif
+    } else if (p->state == RUNNABLE) {
+      p->wait_ticks++;    // افزایش تیک‌های انتظار برای مکانیزم Aging در MLFQ
+    }
+    release(&p->lock);
   }
 
   // ask for the next timer interrupt. this also clears

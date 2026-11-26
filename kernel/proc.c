@@ -15,7 +15,8 @@ struct proc *initproc;
 
 int nextpid = 1;
 struct spinlock pid_lock;
-
+extern void cfs_scheduler(void);
+extern void mlfq_scheduler(void);
 extern void forkret(void);
 static void freeproc(struct proc *p);
 
@@ -42,6 +43,16 @@ proc_mapstacks(pagetable_t kpgtbl)
     uint64 va = KSTACK((int)(p - proc));
     kvmmap(kpgtbl, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
   }
+}
+
+// تنظیم فرآیند به حالت RUNNABLE و به‌روزرسانی زمان ورود به صف
+void
+set_runnable(struct proc *p)
+{
+  acquire(&p->lock);
+  p->state = RUNNABLE;
+  p->queue_enter = ticks; // ثبت زمان دقیق ورود به صف با استفاده از متغیر سراسری ticks
+  release(&p->lock);
 }
 
 // initialize the proc table.
@@ -146,6 +157,17 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+
+  // مقداردهی اولیه فیلدهای زمان‌بند MLFQ و CFS
+  p->queue = 1;              // شروع از بالاترین صف در MLFQ
+  p->queue_enter = ticks;    // ثبت زمان ورود به صف با استفاده از متغیر ticks
+  p->wait_ticks = 0;         // صفر کردن تیک‌های انتظار
+  p->burst = DEFAULT_BURST;  // برست پیش‌فرض
+  p->confidence = DEFAULT_CONF;
+  p->quantum_ticks = 0;      // صفر کردن مصرف کوانتوم
+  p->nice = 0;               // مقدار پیش‌فرض nice برای CFS
+  p->weight = NICE_0_WEIGHT; // وزن متناظر با nice=0
+  p->vruntime = 0;           // شروع vruntime از صفر
 
   return p;
 }
@@ -420,53 +442,39 @@ kwait(uint64 addr)
 }
 
 // Per-CPU process scheduler.
-// Each CPU calls scheduler() after setting itself up.
-// Scheduler never returns.  It loops, doing:
-//  - choose a process to run.
-//  - swtch to start running that process.
-//  - eventually that process transfers control
-//    via swtch back to the scheduler.
+// Each CPU loops, setting c->proc to the process currently running,
+// then swtch to run that process.
+// Can never return.  PerformsDavies process selection based on scheduler type.
 void
 scheduler(void)
 {
-  struct proc *p;
   struct cpu *c = mycpu();
 
   c->proc = 0;
-  for (;;) {
-    // The most recent process to run may have had interrupts
-    // turned off; enable them to avoid a deadlock if all
-    // processes are waiting. Then turn them back off
-    // to avoid a possible race between an interrupt
-    // and wfi.
+  for(;;){
     intr_on();
-    intr_off();
 
+    // پشتیبانی از زمان‌بند CFS
+#ifdef SCHEDULER_CFS
+    cfs_scheduler();
+#elif defined(SCHEDULER_MLFQ)
+    mlfq_scheduler();
+#else
+    // زمان‌بند پیش‌فرض Round-Robin
+    struct proc *p;
     int found = 0;
-    for (p = proc; p < &proc[NPROC]; p++) {
+    for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
-      if (p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
+      if(p->state == RUNNABLE) {
         p->state = RUNNING;
         c->proc = p;
         swtch(&c->context, &p->context);
-
-        // Don't re-enable interrupts on release.
-        mycpu()->intena = 0;
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
         c->proc = 0;
         found = 1;
       }
       release(&p->lock);
     }
-    if (found == 0) {
-      // nothing to run; stop running on this core until an interrupt.
-      asm volatile("wfi");
-    }
+#endif
   }
 }
 
@@ -498,11 +506,27 @@ sched(void)
 }
 
 // Give up the CPU for one scheduling round.
+// Give up the CPU for one scheduling round.
 void
 yield(void)
 {
   struct proc *p = myproc();
   acquire(&p->lock);
+
+  // بررسی اتمام کوانتوم و تنزل صف (Demotion) در الگوریتم MLFQ
+#ifdef SCHEDULER_MLFQ
+  if(p && p->state == RUNNING) {
+    // فرض: کوانتوم صف اول ۵ تیک و صف‌های بعدی ۱۰ تیک است
+    int limit = (p->queue == 1) ? QUANTUM_RR : 10;
+    if(p->quantum_ticks >= limit) {
+      if(p->queue < 3) {
+        p->queue++; // تنزل به صف پایین‌تر (کاهش اولویت)
+      }
+      p->quantum_ticks = 0; // ریست تیک‌های مصرفی کوانتوم
+    }
+  }
+#endif
+
   p->state = RUNNABLE;
   sched();
   release(&p->lock);
