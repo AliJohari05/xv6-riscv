@@ -99,7 +99,7 @@ main(void)
     failed |= (show(NPROC + 1) < 0);
 
     failed |= expect_result("zero limit", getprocs(procs, 0), 0);
-    failed |= expect_result("negative limit", getprocs(procs, -1), 0);
+    failed |= expect_result("negative limit", getprocs(procs, -1), -1);
 
     // Use an address outside the xv6-riscv user address range.
     failed |= expect_result("invalid address",
